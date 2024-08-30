@@ -1,0 +1,160 @@
+#apiVersion: platform.confluent.io/v1beta1
+#kind: KRaftController
+#metadata:
+#  name: kraftcontroller
+#  namespace: confluent
+#spec:
+#  dataVolumeCapacity: 10G
+#  image:
+#    application: docker.io/confluentinc/cp-server:7.7.0
+#    init: confluentinc/confluent-init-container:2.9.1
+#  replicas: 1
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: Zookeeper
+metadata:
+  name: zookeeper
+  namespace: confluent
+spec:
+  replicas: 3
+  image:
+    application: confluentinc/cp-zookeeper:7.7.0
+    init: confluentinc/confluent-init-container:2.9.0
+  dataVolumeCapacity: 10Gi
+  logVolumeCapacity: 10Gi
+  authentication:
+    type: mtls
+  tls:
+    secretRef: tls-group1
+---
+
+apiVersion: platform.confluent.io/v1beta1
+kind: Kafka
+metadata:
+  name: kafka
+  namespace: confluent
+spec:
+  dataVolumeCapacity: 10G
+  image:
+    application: docker.io/confluentinc/cp-server:7.7.0
+    init: confluentinc/confluent-init-container:2.9.1
+  replicas: 3
+  tls:
+    secretRef: tls-group1
+  configOverrides:
+    server:
+      -  confluent.metadata.server.user.store=OAUTH
+  authorization:
+    type: rbac
+    superUsers:
+    - User:4113761a-d187-402f-a48a-8ae0e86f78dd,User:kafka # sub
+  services:
+    mds:
+#      tls:
+#        enabled: true
+      tokenKeyPair:
+        secretRef: mds-token
+      provider:
+        sso:
+          clientCredentials:
+            secretRef: oauth-jass
+          configurations:
+#            groupsClaimName: groups
+            subClaimName: sub
+            issuer: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+            jwksEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+            authorizeBaseEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/authorize
+            tokenBaseEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+            refreshToken: false
+        oauth: # OAuth server configs
+          configurations:
+            groupsClaimName: groups
+            subClaimName: sub
+            audience: d4330c88-ca9e-4340-b06f-a490449b4d7b
+            expectedIssuer: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+            jwksEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+            tokenEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+
+  dependencies:
+#    kRaftController:
+#      clusterRef:
+#        name: kraftcontroller
+    zookeeper:
+      endpoint: zookeeper.confluent.svc.cluster.local:2182
+      authentication:
+        type: mtls
+      tls:
+        enabled: true
+#    kafkaRest:
+#      authentication:
+#        type: oauth
+#        jaasConfig:
+#          secretRef: oauth-jass
+#        oauthSettings:
+#          tokenEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+#          expectedIssuer: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+#          jwksEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+##          scope: d4330c88-ca9e-4340-b06f-a490449b4d7b/.default
+#          subClaimName: sub
+##          audience: 6b566e15-8094-4832-95be-02a3f8b20fe2
+    kafkaRest:
+      authentication:
+        type: bearer
+        bearer:
+          secretRef: mds-client
+#---
+#apiVersion: platform.confluent.io/v1beta1
+#kind: ControlCenter
+#metadata:
+#  name: controlcenter
+#  namespace: confluent
+#spec:
+#  replicas: 1
+#  image:
+#    application: confluentinc/cp-enterprise-control-center:7.7.0
+#    init: confluentinc/confluent-init-container:2.9.1
+#  dataVolumeCapacity: 10Gi
+#  authorization:
+#    type: rbac
+#  dependencies:
+#    kafka:
+#      bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
+#    mds:
+#      ssoProtocol: oidc
+#      endpoint: https://kafka.confluent.svc.cluster.local:8090
+#      tokenKeyPair:
+#        secretRef: mds-token
+#      authentication:
+#        type: oauth
+#        jaasConfig:
+#          secretRef: oauth-jass
+#        oauthSettings:
+#          tokenEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+#          scope: d4330c88-ca9e-4340-b06f-a490449b4d7b/.default
+---
+
+apiVersion: platform.confluent.io/v1beta1
+kind: KafkaRestClass
+metadata:
+  name: default
+  namespace: confluent
+spec:
+  kafkaRest:
+#    tls:
+#      secretRef: tls-group1
+    authentication:
+#      type: oauth
+#      oauth:
+#        secretRef: oauth-jass
+#        configuration:
+##          groupsClaimName: groups
+#          subClaimName: sub
+##          audience: d4330c88-ca9e-4340-b06f-a490449b4d7b
+#          tokenEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+##          expectedIssuer: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+##          jwksEndpointUri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+#          scope: d4330c88-ca9e-4340-b06f-a490449b4d7b/.default
+      type: bearer
+      bearer:
+        secretRef: rest-credential
+
